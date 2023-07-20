@@ -4,90 +4,95 @@ import numpy as np
 import matplotlib.pyplot as plt
 import time
 
-from pygaze import *
+from detectors import blink_detection, saccade_detection, fixation_detection
 
 # frame rate in fps
 frame_rate = float(input("Enter frame rate of eye tracker (HoloLens default is 30fps): "))
 
 # time interval in seconds
-time_interval = float(input("Enter the interval at which saccade duration is calculated: "))
+time_interval = float(input("Enter desired interval in seconds: "))
 
+# time interval in frames
 frame_interval = frame_rate * time_interval
-
-input_eye_points = []
-
-saccade_durations = []
 
 frame_stamps = [0]
 
 errors = []
 
+# dictionary - key = name of AOI, value = list of hit frames per frame interval (len(values) = len(frame_stamps)), sort of like a hash map
 target_hits = {}
 
+x_points = []
 
-with open('machinesample20230718112820.csv', newline = '\n') as csvfile:
+y_points = []
+
+time_stamps_ms = []
+
+
+with open('machinesample20230719130750.csv', newline = '\n') as csvfile:
     data = csv.DictReader(csvfile, delimiter = ',')
     frame_count = 0;
     
     for row in data:
+        # create frame timestamps for aoi graph
         if frame_count % frame_interval == 0 and frame_count != 0:
             frame_stamps = np.append(frame_stamps, frame_count / frame_rate);
-        frame_count += 1
-
+        
+        # update dictionary when a hit is detected
         if row['hit_name'] != "" and row['hit_name'] != None:
+            # create new key in dictionary when AOI is initially found
             if target_hits.get(row["hit_name"]) == None:
                 target_hits[row["hit_name"]] = []
             # add 0s for intervals with no hits
             for i in range(0, len(frame_stamps) - len(target_hits[row["hit_name"]])):
                     target_hits[row["hit_name"]].append(0)
-            target_hits[row["hit_name"]][len(frame_stamps)-1] += 1
+            target_hits[row["hit_name"]][len(frame_stamps)-1] += 1 
 
-        
-
-        '''
-        non_nans = 0
-        if row['enabled'] != 'enabled' and row['enabled'] == 'TRUE' and row['valid'] == 'TRUE':
-            input_eye_points.append([float(row['gaze_origin_x']) + float(row['gaze_direction_x']), float(row['gaze_origin_y']) + float(row['gaze_direction_y'])])
-            non_nans = 1
+        if row['enabled'] == "True" and row['valid'] == "True":
+            # add points for saccade analysis
+            # to do: figure out if this is actually the appropriate way to find 2d gaze position
+            x_points = np.append(x_points, float(row['gaze_origin_x']) + float(row['gaze_direction_x']))
+            y_points = np.append(y_points, float(row['gaze_origin_y']) + float(row['gaze_direction_y']))
         else:
-            input_eye_points.append([None, None])
-        if frame_count % frame_interval == 0 and frame_count != 0:
-            if non_nans:
-                results = saccademodel.fit(input_eye_points)
-                print("info at frame: ", frame_count)
-                if "saccade_points" in results.keys():
-                    print('saccade duration: ', len(results["saccade_points"]) / frame_rate)
-                    saccade_durations = np.append(saccade_durations, len(results["saccade_points"]) / frame_rate)
-                    frame_stamps = np.append(frame_stamps, frame_count);
-                print('error: ', results["mean_squared_error"])
-                errors = np.append(errors, results["mean_squared_error"]);
-                
-            input_eye_points.clear()
-
-
+            x_points = np.append(x_points, 0.0)
+            y_points = np.append(y_points, 0.0)
+        time_stamps_ms = np.append(time_stamps_ms, frame_count / frame_rate * 1000.0)
         frame_count += 1
-        if frame_count > 200000:
-            break
-        ''' 
+        
+Ssac, Esac = saccade_detection(x_points, y_points, time_stamps_ms)
+Sfix, Efix = fixation_detection(x_points, y_points, time_stamps_ms)
+Sblk, Eblk = blink_detection(x_points, y_points, time_stamps_ms)
 
 
 for data in target_hits.items():
+    # add 0s for intervals with no hits
     for i in range(0, len(frame_stamps) - len(data[1])):
         data[1].append(0)
-    if "Controller" in data[0]:
-        plt.plot(frame_stamps, data[1], label = data[0], color = "blue")
-    elif "Display" in data[0]:
-        plt.plot(frame_stamps, data[1], label = data[0], color = "red")
-    else:
-        plt.plot(frame_stamps, data[1], label = data[0])
+    plt.figure(0)
+    plt.plot(frame_stamps, data[1], label = data[0])
     
-    plt.legend()
+    plt.legend(fontsize = 12)
 
 
 
 
-plt.xlabel("Seconds")
-plt.ylabel("Fixations in " + str(time_interval) + " Second Interval")
+plt.xlabel("Time (seconds)", fontsize = 12)
+plt.ylabel("Fixation Frames in " + str(time_interval) + " Second Interval", fontsize = 12)
+plt.show()
+
+plt.figure(1)
+fixation_starts = np.array([inner[0] for inner in Efix])
+fixation_durations = np.array([inner[2] for inner in Efix])
+saccade_starts = np.array([inner[0] for inner in Esac])
+saccade_durations = np.array([inner[2] for inner in Esac])
+blink_starts = np.array([inner[0] for inner in Eblk])
+blink_durations = np.array([inner[2] for inner in Eblk])
+plt.scatter(fixation_starts, fixation_durations, label = "Fixations")
+plt.scatter(saccade_starts, saccade_durations, label = "Saccades")
+plt.scatter(blink_starts, blink_durations, label = "Blinks")
+plt.xlabel("Action Start Time (ms)")
+plt.ylabel("Action Duration (ms)")
+plt.legend()
 plt.show()
   
 
