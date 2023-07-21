@@ -19,12 +19,14 @@ def main():
     # time interval in frames
     frame_interval = frame_rate * time_interval
 
-    frame_stamps = [0]
+    
 
     errors = []
 
     # dictionary - key = name of AOI, value = list of hit frames per frame interval (len(values) = len(frame_stamps)), sort of like a hash map
     target_hits = {}
+
+    frame_stamps = [0]
 
     x_points = []
 
@@ -93,31 +95,34 @@ def main():
     plt.xlabel("Action Start Time (ms)")
     plt.ylabel("Action Duration (ms)")
     plt.legend()
-    plt.show()
+    #plt.show()
 
-    draw_fixations(Efix, (int(max(x_points)), int(max(y_points))))
+    #draw_fixations(Efix, (int(max(x_points)), int(max(y_points))))
 
-    draw_scanpath(Efix, Esac, (int(max(x_points)), int(max(y_points))))
+    #draw_scanpath(Efix, Esac, (int(max(x_points)), int(max(y_points))))
 
-    draw_raw(x_points, y_points, (int(max(x_points)), int(max(y_points))))
+    #draw_raw(x_points, y_points, (int(max(x_points)), int(max(y_points))))
 
+    fig = plt.figure(0)
+    colors = {}
     for data in target_hits.items():
         # add 0s for intervals with no hits
         for i in range(0, len(frame_stamps) - len(data[1])):
             data[1].append(0)
-        plt.figure(0)
-        plt.plot(frame_stamps, data[1], label = data[0])
-    
-        plt.legend(fontsize = 12)
-
-
-
+        colors[data[0]] =  tuple(np.random.random(size=3)) 
 
     plt.xlabel("Time (seconds)", fontsize = 12)
     plt.ylabel("Fixation Frames in " + str(time_interval) + " Second Interval", fontsize = 12)
+    
+
+    for i in range(len(frame_stamps)):
+        plt.pause(1)
+        for data in target_hits.items():
+            plt.plot(frame_stamps[0:i], data[1][0:i], label = data[0], color = colors[data[0]])
+        plt.pause(0.005)
+        if i == 0:
+            plt.legend()    
     plt.show()
 
-    
-  
 if __name__ == "__main__":
 	main()
